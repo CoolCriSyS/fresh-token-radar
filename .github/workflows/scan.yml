@@ -1,0 +1,40 @@
+name: Fresh Token Radar Scan
+
+# Runs the Fresh Token Radar scan every 6 hours (memes move fast) and commits
+# fresh results. Each scan logs ~17 real Nansen API calls against the key in secrets.
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run radar scan
+        env:
+          NANSEN_API_KEY: ${{ secrets.NANSEN_API_KEY }}
+        run: |
+          python scanner.py --out /tmp/radar.json
+          python - <<'EOF'
+          import json
+          d = json.load(open('/tmp/radar.json'))
+          json.dump(d, open('web/public/data/latest.json', 'w'), indent=1)
+          print(f"scan complete: {len(d['tokens'])} signals, {d['api_calls']} api calls")
+          EOF
+
+      - name: Commit fresh data
+        run: |
+          git config user.name "radar-scanner-bot"
+          git config user.email "radar-scanner-bot@users.noreply.github.com"
+          git add web/public/data/latest.json
+          git diff --cached --quiet || git commit -m "chore: refresh fresh token radar data"
+          git push
