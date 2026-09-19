@@ -2,6 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+// Data lives on the `data` branch (keeps scan refreshes off main so Vercel
+// doesn't rebuild); fall back to the bundled copy if the remote fetch fails.
+const DATA_URLS = [
+  "https://raw.githubusercontent.com/CoolCriSyS/fresh-token-radar/data/web/public/data/latest.json",
+  "/data/latest.json",
+];
+const loadData = () => {
+  const attempt = (i) =>
+    i >= DATA_URLS.length
+      ? Promise.reject(new Error("data unavailable"))
+      : fetch(DATA_URLS[i])
+          .then((r) => { if (!r.ok) throw new Error("bad response"); return r.json(); })
+          .catch(() => attempt(i + 1));
+  return attempt(0);
+};
+
 // Compact money: 1.2M, 300K. Handles null/undefined.
 const compact$ = (n) => {
   if (n == null || Number.isNaN(n)) return "—";
@@ -107,8 +123,7 @@ export default function Page() {
   const [chainFilter, setChainFilter] = useState("all");
 
   useEffect(() => {
-    fetch("/data/latest.json")
-      .then((r) => { if (!r.ok) throw new Error("bad"); return r.json(); })
+    loadData()
       .then(setData)
       .catch(() => setLoadError(true));
   }, []);
