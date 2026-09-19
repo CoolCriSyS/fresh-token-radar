@@ -1,7 +1,9 @@
 name: Fresh Token Radar Scan
 
 # Runs the Fresh Token Radar scan every 6 hours (memes move fast) and commits
-# fresh results. Each scan logs ~17 real Nansen API calls against the key in secrets.
+# fresh results to the `data` branch (NOT main — keeps scan refreshes from
+# triggering Vercel redeploys; the dashboard fetches the data branch at runtime).
+# Each scan logs ~17 real Nansen API calls against the key in secrets.
 on:
   schedule:
     - cron: "0 */6 * * *"
@@ -27,14 +29,16 @@ jobs:
           python - <<'EOF'
           import json
           d = json.load(open('/tmp/radar.json'))
-          json.dump(d, open('web/public/data/latest.json', 'w'), indent=1)
           print(f"scan complete: {len(d['tokens'])} signals, {d['api_calls']} api calls")
           EOF
 
-      - name: Commit fresh data
+      - name: Commit fresh data to data branch
         run: |
           git config user.name "radar-scanner-bot"
           git config user.email "radar-scanner-bot@users.noreply.github.com"
+          git fetch origin data:data
+          git checkout data
+          cp /tmp/radar.json web/public/data/latest.json
           git add web/public/data/latest.json
           git diff --cached --quiet || git commit -m "chore: refresh fresh token radar data"
-          git push
+          git push origin data
